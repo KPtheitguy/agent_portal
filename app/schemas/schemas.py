@@ -41,12 +41,37 @@ class AgentResponse(BaseModel):
     agent: Agent
     api_key: str
 
+class MetricCreate(BaseModel):
+    metric_type: str
+    value: Dict[str, Any]
+    timestamp: datetime = datetime.utcnow()
+
+class Metric(MetricCreate):
+    id: UUID4
+    agent_id: UUID4
+
+    class Config:
+        from_attributes = True
+
 class MetricsSubmit(BaseModel):
     cpu: Dict
     memory: Dict
     disk: Dict
     network: Dict
     timestamp: datetime = datetime.utcnow()
+
+class LogCreate(BaseModel):
+    level: str
+    message: str
+    details: Optional[Dict] = None
+    timestamp: datetime = datetime.utcnow()
+
+class Log(LogCreate):
+    id: UUID4
+    agent_id: UUID4
+
+    class Config:
+        from_attributes = True
 
 class LogSubmit(BaseModel):
     level: str

@@ -5,7 +5,7 @@ from typing import List
 from ....core.database import get_db
 from ....schemas import schemas
 from ....models import models
-from datetime import datetime, timedelta
+from datetime import datetime
 
 router = APIRouter()
 
@@ -16,15 +16,29 @@ def record_metric(
     db: Session = Depends(get_db)
 ):
     """Record a new metric for an agent"""
-    db_agent = db.query(models.Agent).filter(models.Agent.id == agent_id).first()
-    if not db_agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    try:
+        agent = db.query(models.Agent).filter(
+            models.Agent.id == agent_id
+        ).first()
+        
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
 
-    db_metric = models.AgentMetric(**metric.dict(), agent_id=agent_id)
-    db.add(db_metric)
-    db.commit()
-    db.refresh(db_metric)
-    return db_metric
+        db_metric = models.AgentMetric(
+            agent_id=agent_id,
+            metric_type=metric.metric_type,
+            value=metric.value,
+            timestamp=metric.timestamp
+        )
+        
+        db.add(db_metric)
+        db.commit()
+        db.refresh(db_metric)
+        return db_metric
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{agent_id}", response_model=List[schemas.Metric])
 def get_metrics(
@@ -60,18 +74,3 @@ def get_latest_metric(
         raise HTTPException(status_code=404, detail="Metric not found")
     
     return metric
-
-@router.delete("/{agent_id}")
-def delete_old_metrics(
-    agent_id: str,
-    days: int = 30,
-    db: Session = Depends(get_db)
-):
-    """Delete metrics older than specified days"""
-    db.query(models.AgentMetric).filter(
-        models.AgentMetric.agent_id == agent_id,
-        models.AgentMetric.timestamp < datetime.utcnow() - timedelta(days=days)
-    ).delete()
-    
-    db.commit()
-    return {"status": "success", "message": f"Deleted metrics older than {days} days"}
