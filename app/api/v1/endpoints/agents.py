@@ -1,96 +1,122 @@
 # app/api/v1/endpoints/agents.py
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from typing import List
+from typing import Optional, Dict
+from datetime import datetime
 from ....core.database import get_db
 from ....schemas import schemas
 from ....models import models
-from datetime import datetime
+from ....core import security
 
-router = APIRouter(
-    prefix="/agents",
-    tags=["agents"],
-    responses={404: {"description": "Not found"}}
-)
+router = APIRouter()
 
-@router.post("/register", response_model=schemas.Agent, 
-            summary="Register a new agent",
-            description="Register a new agent or update existing one")
-def register_agent(agent: schemas.AgentCreate, db: Session = Depends(get_db)):
+@router.post("/register/token")
+async def get_registration_token(
+    request: schemas.TokenRequest,
+    db: Session = Depends(get_db)
+):
+    """Get a registration token for an agent"""
+    if not security.verify_admin_key(request.admin_key):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid admin key"
+        )
+    
+    token = security.generate_registration_token()
+    
+    # Store token in database
+    db_token = models.RegistrationToken(
+        token=token,
+        environment=request.environment,
+        description=request.description,
+        expires_at=datetime.utcnow() + timedelta(hours=24)  # Token expires in 24 hours
+    )
+    db.add(db_token)
+    db.commit()
+    
+    return {
+        "token": token,
+        "expires_at": db_token.expires_at
+    }
+
+@router.post("/register/agent", response_model=schemas.Agent)
+async def register_agent(
+    agent: schemas.AgentRegister,
+    db: Session = Depends(get_db)
+):
+    """Register a new agent with a token"""
+    # Verify token
+    db_token = db.query(models.RegistrationToken).filter(
+        models.RegistrationToken.token == agent.registration_token,
+        models.RegistrationToken.used == False,
+        models.RegistrationToken.expires_at > datetime.utcnow()
+    ).first()
+    
+    if not db_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired registration token"
+        )
+    
     try:
-        existing_agent = db.query(models.Agent).filter(
-            models.Agent.hostname == agent.hostname
-        ).first()
-
-        if existing_agent:
-            for key, value in agent.dict(exclude_unset=True).items():
-                setattr(existing_agent, key, value)
-            existing_agent.last_seen = datetime.utcnow()
-            existing_agent.status = 'active'
-            db.commit()
-            db.refresh(existing_agent)
-            return existing_agent
-
-        db_agent = models.Agent(**agent.dict())
-        db.add(db_agent)
+        # Create new agent
+        new_agent = models.Agent(
+            hostname=agent.hostname,
+            ip_address=agent.ip_address,
+            environment=db_token.environment,
+            description=agent.description or db_token.description,
+            version=agent.version,
+            os_info=agent.os_info,
+            status='active',
+            last_seen=datetime.utcnow()
+        )
+        
+        db.add(new_agent)
+        
+        # Mark token as used
+        db_token.used = True
+        db_token.used_by = new_agent.id
+        db_token.used_at = datetime.utcnow()
+        
         db.commit()
-        db.refresh(db_agent)
-        return db_agent
-
+        db.refresh(new_agent)
+        
+        # Generate API key for future communications
+        api_key = security.generate_api_key()
+        db_api_key = models.AgentApiKey(
+            agent_id=new_agent.id,
+            key=api_key,
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(db_api_key)
+        db.commit()
+        
+        return {
+            "agent": new_agent,
+            "api_key": api_key
+        }
+        
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=List[schemas.Agent],
-           summary="List all agents",
-           description="Get a list of all registered agents with optional status filter")
-def list_agents(
-    status: str = None,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
+@router.get("/agent/{agent_id}")
+async def get_agent(
+    agent_id: str,
+    db: Session = Depends(get_db),
+    api_key: str = Header(..., alias="X-API-Key")
 ):
-    query = db.query(models.Agent)
-    if status:
-        query = query.filter(models.Agent.status == status)
-    return query.offset(skip).limit(limit).all()
-
-@router.get("/{agent_id}", response_model=schemas.Agent,
-           summary="Get agent details",
-           description="Get detailed information about a specific agent")
-def get_agent(agent_id: str, db: Session = Depends(get_db)):
+    """Get agent details"""
+    if not security.verify_agent_api_key(db, agent_id, api_key):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+    
     agent = db.query(models.Agent).filter(models.Agent.id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return agent
-
-@router.put("/{agent_id}", response_model=schemas.Agent,
-           summary="Update agent",
-           description="Update agent information")
-def update_agent(
-    agent_id: str,
-    agent_update: schemas.AgentUpdate,
-    db: Session = Depends(get_db)
-):
-    db_agent = db.query(models.Agent).filter(models.Agent.id == agent_id).first()
-    if not db_agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
-    for key, value in agent_update.dict(exclude_unset=True).items():
-        setattr(db_agent, key, value)
-
-    db.commit()
-    db.refresh(db_agent)
-    return db_agent
-
-@router.delete("/{agent_id}",
-              summary="Delete agent",
-              description="Delete an agent from the system")
-def delete_agent(agent_id: str, db: Session = Depends(get_db)):
-    db_agent = db.query(models.Agent).filter(models.Agent.id == agent_id).first()
-    if not db_agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
     
-    db.delete(db_agent)
-    db.commit()
-    return {"status": "success", "message": "Agent deleted"}
+    return agent
