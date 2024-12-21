@@ -1,5 +1,4 @@
 # app/models/models.py
-
 from sqlalchemy import Column, String, DateTime, Boolean, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 import uuid

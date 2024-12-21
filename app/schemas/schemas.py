@@ -12,7 +12,6 @@ class TokenRequest(BaseModel):
 class TokenResponse(BaseModel):
     token: str
     expires_at: datetime
-    environment: str
 
 class AgentRegister(BaseModel):
     hostname: str
@@ -37,49 +36,6 @@ class Agent(BaseModel):
     class Config:
         from_attributes = True
 
-class AgentResponse(BaseModel):
+class AgentRegisterResponse(BaseModel):
     agent: Agent
     api_key: str
-
-class MetricCreate(BaseModel):
-    metric_type: str
-    value: Dict[str, Any]
-    timestamp: datetime = datetime.utcnow()
-
-class Metric(MetricCreate):
-    id: UUID4
-    agent_id: UUID4
-
-    class Config:
-        from_attributes = True
-
-class MetricsSubmit(BaseModel):
-    cpu: Dict
-    memory: Dict
-    disk: Dict
-    network: Dict
-    timestamp: datetime = datetime.utcnow()
-
-class LogCreate(BaseModel):
-    level: str
-    message: str
-    details: Optional[Dict] = None
-    timestamp: datetime = datetime.utcnow()
-
-class Log(LogCreate):
-    id: UUID4
-    agent_id: UUID4
-
-    class Config:
-        from_attributes = True
-
-class LogSubmit(BaseModel):
-    level: str
-    message: str
-    details: Optional[Dict] = None
-    timestamp: datetime = datetime.utcnow()
-
-class AgentUpdate(BaseModel):
-    description: Optional[str]
-    version: Optional[str]
-    status: Optional[str]

@@ -1,36 +1,29 @@
 # app/core/security.py
-from fastapi import HTTPException, Header
+import secrets
 from typing import Optional
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
 from ..config.settings import get_settings
 
 settings = get_settings()
 
-async def validate_admin_key(admin_key: str = Header(..., alias="X-Admin-Key")) -> str:
-    """Validate admin API key"""
-    if admin_key != settings.ADMIN_KEY:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid admin key"
-        )
-    return admin_key
-
-async def validate_api_key(api_key: str = Header(..., alias="X-API-Key")) -> str:
-    """Validate agent API key"""
-    # You would typically check this against your database
-    # For now, we'll just ensure it's not empty
-    if not api_key:
-        raise HTTPException(
-            status_code=401,
-            detail="API key is required"
-        )
-    return api_key
+def verify_admin_key(admin_key: str) -> bool:
+    """Verify if admin key is valid"""
+    return admin_key == settings.ADMIN_KEY
 
 def generate_registration_token() -> str:
     """Generate a new registration token"""
     return secrets.token_urlsafe(32)
 
-def verify_registration_token(token: str) -> bool:
-    """Verify if a registration token is valid"""
-    # You would typically check this against your database
-    # For testing, return True
-    return True
+def generate_api_key() -> str:
+    """Generate a new API key"""
+    return secrets.token_urlsafe(48)
+
+def verify_agent_api_key(db: Session, agent_id: str, api_key: str) -> bool:
+    """Verify if agent API key is valid"""
+    db_api_key = db.query(models.AgentApiKey).filter(
+        models.AgentApiKey.agent_id == agent_id,
+        models.AgentApiKey.key == api_key,
+        models.AgentApiKey.revoked == False
+    ).first()
+    return db_api_key is not None
