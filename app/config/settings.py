@@ -1,23 +1,24 @@
 # app/config/settings.py
 from pydantic_settings import BaseSettings
+from typing import List
 from functools import lru_cache
+import secrets
 
 class Settings(BaseSettings):
-    APP_NAME: str = "Nginx Agent Manager"
-    DEBUG: bool = False
+    APP_NAME: str = "Ubuntu Agent Manager"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
-    # Database settings
-    POSTGRES_USER: str = "username"
-    POSTGRES_PASSWORD: str = "password"
-    POSTGRES_SERVER: str = "0.0.0.0"
-    POSTGRES_PORT: str = "5432"
-    POSTGRES_DB: str = "pgadminpi"
+    # Security
+    ADMIN_KEY: str = "your-admin-key-here"  # Change this in production
+    SECRET_KEY: str = secrets.token_urlsafe(32)
     
-    # JWT Settings
-    SECRET_KEY: str = "your-secret-key-here"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # Database
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_PORT: str = "5432"
+    POSTGRES_DB: str = "agent_manager"
     
     @property
     def DATABASE_URL(self) -> str:

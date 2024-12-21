@@ -23,7 +23,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS configuration
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,7 +36,8 @@ app.add_middleware(
 @app.post("/api/v1/register/token", response_model=schemas.TokenResponse)
 async def create_registration_token(
     request: schemas.TokenRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin_key: str = Depends(security.validate_admin_key)
 ):
     """Generate a new registration token"""
     return await agents.get_registration_token(request, db)
@@ -49,64 +50,30 @@ async def register_agent(
     """Register a new agent"""
     return await agents.register_agent(agent, db)
 
-@app.get("/api/v1/agents", response_model=List[schemas.Agent])
-async def list_agents(
-    environment: str = None,
-    status: str = None,
-    db: Session = Depends(get_db),
-    api_key: str = Depends(security.validate_admin_key)
-):
-    """List all registered agents"""
-    return await agents.get_agents(environment, status, db)
+# Agent routes
+app.include_router(
+    agents.router,
+    prefix="/api/v1/agents",
+    tags=["agents"],
+    dependencies=[Depends(security.validate_api_key)]
+)
 
-@app.get("/api/v1/agents/{agent_id}", response_model=schemas.Agent)
-async def get_agent(
-    agent_id: str,
-    db: Session = Depends(get_db),
-    api_key: str = Depends(security.validate_api_key)
-):
-    """Get agent details"""
-    return await agents.get_agent(agent_id, db)
+# Metrics routes
+app.include_router(
+    metrics.router,
+    prefix="/api/v1/metrics",
+    tags=["metrics"],
+    dependencies=[Depends(security.validate_api_key)]
+)
 
-@app.post("/api/v1/agents/{agent_id}/metrics")
-async def submit_metrics(
-    agent_id: str,
-    metrics: schemas.MetricsSubmit,
-    db: Session = Depends(get_db),
-    api_key: str = Depends(security.validate_api_key)
-):
-    """Submit agent metrics"""
-    return await metrics.submit_metrics(agent_id, metrics, db)
+# Logs routes
+app.include_router(
+    logs.router,
+    prefix="/api/v1/logs",
+    tags=["logs"],
+    dependencies=[Depends(security.validate_api_key)]
+)
 
-@app.post("/api/v1/agents/{agent_id}/logs")
-async def submit_logs(
-    agent_id: str,
-    logs: schemas.LogSubmit,
-    db: Session = Depends(get_db),
-    api_key: str = Depends(security.validate_api_key)
-):
-    """Submit agent logs"""
-    return await logs.submit_logs(agent_id, logs, db)
-
-@app.delete("/api/v1/agents/{agent_id}")
-async def deregister_agent(
-    agent_id: str,
-    db: Session = Depends(get_db),
-    api_key: str = Depends(security.validate_admin_key)
-):
-    """Deregister an agent"""
-    return await agents.deregister_agent(agent_id, db)
-
-@app.post("/api/v1/agents/{agent_id}/revoke")
-async def revoke_agent_key(
-    agent_id: str,
-    db: Session = Depends(get_db),
-    api_key: str = Depends(security.validate_admin_key)
-):
-    """Revoke agent's API key"""
-    return await agents.revoke_agent_key(agent_id, db)
-
-# Health check endpoint
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -114,25 +81,6 @@ async def health_check():
         "status": "healthy",
         "version": settings.VERSION
     }
-
-# Include other routers
-app.include_router(
-    agents.router,
-    prefix="/api/v1/agents",
-    tags=["agents"]
-)
-
-app.include_router(
-    metrics.router,
-    prefix="/api/v1/metrics",
-    tags=["metrics"]
-)
-
-app.include_router(
-    logs.router,
-    prefix="/api/v1/logs",
-    tags=["logs"]
-)
 
 if __name__ == "__main__":
     import uvicorn
