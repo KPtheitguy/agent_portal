@@ -2,21 +2,22 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime, timedelta
 from ....core.database import get_db
 from ....schemas import schemas
 from ....models import models
-from datetime import datetime
 
 router = APIRouter()
 
 @router.post("/{agent_id}", response_model=schemas.Metric)
-def record_metric(
+async def record_metric(
     agent_id: str,
     metric: schemas.MetricCreate,
     db: Session = Depends(get_db)
 ):
     """Record a new metric for an agent"""
     try:
+        # Verify agent exists
         agent = db.query(models.Agent).filter(
             models.Agent.id == agent_id
         ).first()
@@ -24,11 +25,12 @@ def record_metric(
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
 
+        # Create metric
         db_metric = models.AgentMetric(
             agent_id=agent_id,
             metric_type=metric.metric_type,
             value=metric.value,
-            timestamp=metric.timestamp
+            timestamp=metric.timestamp or datetime.utcnow()
         )
         
         db.add(db_metric)
@@ -40,10 +42,10 @@ def record_metric(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{agent_id}", response_model=List[schemas.Metric])
-def get_metrics(
+@router.get("/{agent_id}/metrics", response_model=List[schemas.Metric])
+async def get_agent_metrics(
     agent_id: str,
-    metric_type: str = None,
+    metric_type: Optional[str] = None,
     hours: int = 24,
     db: Session = Depends(get_db)
 ):
@@ -59,7 +61,7 @@ def get_metrics(
     return query.order_by(models.AgentMetric.timestamp.desc()).all()
 
 @router.get("/{agent_id}/latest", response_model=schemas.Metric)
-def get_latest_metric(
+async def get_latest_metric(
     agent_id: str,
     metric_type: str,
     db: Session = Depends(get_db)

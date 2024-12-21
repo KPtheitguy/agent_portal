@@ -3,7 +3,6 @@ from pydantic import BaseModel, UUID4
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 
-# Remove admin_key from TokenRequest
 class TokenRequest(BaseModel):
     environment: str
     description: Optional[str] = None
@@ -39,3 +38,51 @@ class Agent(BaseModel):
 class AgentResponse(BaseModel):
     agent: Agent
     api_key: str
+
+# Add Metric schemas
+class MetricBase(BaseModel):
+    metric_type: str
+    value: Dict[str, Any]
+    timestamp: Optional[datetime] = None
+
+class MetricCreate(MetricBase):
+    agent_id: UUID4
+
+class Metric(MetricBase):
+    id: UUID4
+    agent_id: UUID4
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+class MetricsSubmit(BaseModel):
+    cpu: Dict[str, Any]
+    memory: Dict[str, Any]
+    disk: Dict[str, Any]
+    network: Dict[str, Any]
+    timestamp: datetime = datetime.utcnow()
+
+# Log schemas
+class LogBase(BaseModel):
+    level: str
+    message: str
+    details: Optional[Dict] = None
+    timestamp: Optional[datetime] = None
+
+class LogCreate(LogBase):
+    pass
+
+class Log(LogBase):
+    id: UUID4
+    agent_id: UUID4
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+class LogSubmit(BaseModel):
+    level: str
+    message: str
+    details: Optional[Dict] = None
+    timestamp: datetime = datetime.utcnow()
