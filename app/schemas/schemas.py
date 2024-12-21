@@ -3,8 +3,8 @@ from pydantic import BaseModel, UUID4
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 
+# Remove admin_key from TokenRequest
 class TokenRequest(BaseModel):
-    admin_key: str
     environment: str
     description: Optional[str] = None
     expiry_hours: Optional[int] = 24
@@ -36,6 +36,6 @@ class Agent(BaseModel):
     class Config:
         from_attributes = True
 
-class AgentRegisterResponse(BaseModel):
+class AgentResponse(BaseModel):
     agent: Agent
     api_key: str

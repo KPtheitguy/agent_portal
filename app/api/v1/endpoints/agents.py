@@ -1,7 +1,7 @@
 # app/api/v1/endpoints/agents.py
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from typing import Optional, Dict
+from typing import Optional
 from datetime import datetime, timedelta
 from ....core.database import get_db
 from ....schemas import schemas
@@ -12,13 +12,13 @@ from ....config.settings import get_settings
 router = APIRouter()
 settings = get_settings()
 
-@router.post("/register/token")
+@router.post("/register/token", response_model=schemas.TokenResponse)
 async def get_registration_token(
-    request: schemas.TokenRequest,
+    token_request: schemas.TokenRequest,
     db: Session = Depends(get_db),
-    x_admin_key: str = Header(..., alias="X-Admin-Key")  # Changed to use header
+    x_admin_key: str = Header(..., alias="X-Admin-Key")
 ):
-    """Get a registration token for an agent"""
+    """Generate a registration token for an agent"""
     # Verify admin key from header
     if x_admin_key != settings.ADMIN_KEY:
         raise HTTPException(
@@ -31,9 +31,9 @@ async def get_registration_token(
     # Store token in database
     db_token = models.RegistrationToken(
         token=token,
-        environment=request.environment,
-        description=request.description,
-        expires_at=datetime.utcnow() + timedelta(hours=24)  # Token expires in 24 hours
+        environment=token_request.environment,
+        description=token_request.description,
+        expires_at=datetime.utcnow() + timedelta(hours=token_request.expiry_hours or 24)
     )
     
     db.add(db_token)
