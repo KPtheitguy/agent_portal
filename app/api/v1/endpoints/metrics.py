@@ -1,7 +1,7 @@
 # app/api/v1/endpoints/metrics.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 from ....core.database import get_db
 from ....schemas import schemas
