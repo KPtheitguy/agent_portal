@@ -1,6 +1,6 @@
 # app/schemas/schemas.py
 from pydantic import BaseModel, UUID4
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from datetime import datetime
 
 class TokenRequest(BaseModel):
